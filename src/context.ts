@@ -1,51 +1,162 @@
-import { NotificationType, useContext } from './context'
-import axios from 'axios'
+import { Connection } from '@solana/web3.js'
+import {
+  Context,
+  getClusterUrl,
+  parseCommitment,
+  setContext,
+  getContext,
+  CliCommandError,
+} from '@marinade.finance/cli-common'
+import { Logger } from 'pino'
+import { createClient, RedisClientType } from 'redis'
 
-export const TELEGRAM_BOT_URL = 'https://api.telegram.org/bot'
+export enum NotificationType {
+  WEBHOOK,
+  TELEGRAM,
+  NONE,
+}
 
-export async function notify(message: string) {
-  const { notification, logger } = useContext()
-  logger.info('notify: %s', message)
-
-  let axiosResponse
-  switch (notification.type) {
-    case NotificationType.TELEGRAM: {
-      const url = `${TELEGRAM_BOT_URL}${notification.botToken}/sendMessage`
-      const headers = {
-        'Content-Type': 'application/json',
-      }
-      const payload = {
-        chat_id: notification.chatId,
-        text: message,
-        disable_notification: true,
-      }
-      logger.debug(
-        'sending telegram notification to "%s" with payload "%s"',
-        url,
-        JSON.stringify(payload),
-      )
-      axiosResponse = await axios.post(url, payload, { headers })
-      break
-    }
-    case NotificationType.WEBHOOK: {
-      axiosResponse = await axios.post(notification.url, { message })
-      logger.debug(
-        'sending webhook notification to "%s" with message "%s"',
-        notification.url,
-        message,
-      )
-
-      break
-    }
+function parseNotificationType(notificationType: string): NotificationType {
+  switch (notificationType) {
+    case 'webhook':
+      return NotificationType.WEBHOOK
+    case 'telegram':
+      return NotificationType.TELEGRAM
+    case 'none':
+      return NotificationType.NONE
     default:
-      return
+      throw new Error('Invalid notification type')
   }
-  if (axiosResponse.status !== 200) {
-    logger.error(
-      'failed to send notification %s; axios status: %s, data: %s',
+}
+
+export type Notification =
+  | { type: NotificationType.WEBHOOK; url: string }
+  | { type: NotificationType.TELEGRAM; botToken: string; chatId: string }
+  | { type: NotificationType.NONE }
+
+export class CliContext extends Context {
+  readonly connection: Connection
+  readonly notification: Notification
+  readonly redisClient: RedisClientType | undefined
+  constructor({
+    connection,
+    logger,
+    skipPreflight,
+    simulate,
+    printOnly,
+    commandName,
+    notification,
+    redisClient,
+  }: {
+    connection: Connection
+    logger: Logger
+    skipPreflight: boolean
+    simulate: boolean
+    printOnly: boolean
+    commandName: string
+    notification: Notification
+    redisClient: RedisClientType | undefined
+  }) {
+    super({
+      logger,
+      skipPreflight,
+      simulate,
+      printOnly,
+      commandName,
+    })
+    this.connection = connection
+    this.notification = notification
+    this.redisClient = redisClient
+  }
+}
+
+export async function setCliContext({
+  url,
+  logger,
+  commitment,
+  command,
+  notificationType,
+  notificationConfig,
+  redisUrl,
+}: {
+  url: string
+  logger: Logger
+  commitment: string
+  command: string
+  notificationType: string
+  notificationConfig: string[] | undefined
+  redisUrl: string | undefined
+}) {
+  const connection = new Connection(
+    getClusterUrl(url),
+    parseCommitment(commitment),
+  )
+  const parsedType = parseNotificationType(notificationType)
+  let notification: Notification
+  switch (parsedType) {
+    case NotificationType.WEBHOOK:
+      if (!notificationConfig || notificationConfig.length === 0) {
+        throw new CliCommandError({
+          commandName: command,
+          valueName: '--notification-config',
+          value: notificationConfig,
+          msg: 'Invalid webhook notification, expecting at least one param: url',
+        })
+      }
+      notification = {
+        type: NotificationType.WEBHOOK,
+        url: notificationConfig[0],
+      }
+      break
+    case NotificationType.TELEGRAM:
+      if (!notificationConfig || notificationConfig.length < 2) {
+        throw new CliCommandError({
+          commandName: command,
+          valueName: '--notification-config',
+          value: notificationConfig,
+          msg: 'Invalid telegram notification, expecting at least two params: botToken and chatId',
+        })
+      }
+      notification = {
+        type: NotificationType.TELEGRAM,
+        botToken: notificationConfig[0],
+        chatId: notificationConfig[1],
+      }
+      break
+    default:
+      notification = { type: NotificationType.NONE }
+  }
+
+  let redisClient: RedisClientType | undefined = undefined
+  if (redisUrl) {
+    try {
+      redisClient = createClient({ url: redisUrl })
+      await redisClient.connect()
+    } catch (e) {
+      throw new CliCommandError({
+        commandName: command,
+        valueName: '--redis-url',
+        value: redisUrl,
+        msg: 'Cannot connect to redis with provided url',
+        cause: e as Error,
+      })
+    }
+  }
+
+  setContext(
+    new CliContext({
+      connection,
+      logger,
+      skipPreflight: false,
+      simulate: false,
+      printOnly: false,
+      commandName: command,
       notification,
-      axiosResponse.status,
-      JSON.stringify(axiosResponse.data),
-    )
-  }
+      redisClient,
+    }),
+  )
+}
+
+export function useContext(): CliContext {
+  return getContext() as CliContext
 }
