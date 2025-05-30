@@ -14,14 +14,13 @@ import { useContext } from './context'
 import { accountsToPubkeyMap } from './utils'
 import { notify } from './notifier'
 import { Logger } from 'pino'
-import { time } from 'console'
 
 // advanced from https://github.com/solana-labs/governance-ui
 //  - expecting to be run every X mins via a cronjob
 //  - checking if a governance proposal just opened in the last X mins
 //  - notifies on WEBHOOK_URL if a new governance proposal was created
 
-const REDIS_KEY = 'spl-gov-notify-proposals:timestamp'
+const REDIS_KEY = 'spl-gov-notifier:proposals_timestamp'
 const fiveMinutesInSeconds = 5 * 60
 const toleranceInSeconds = 30
 
@@ -38,7 +37,6 @@ export function installCheckProposals(program: Command) {
     .option(
       '-t, --time-to-check <seconds>',
       'How many seconds in past should be checked for new proposals in the realm; default 5 minutes',
-
       parseFloat,
       fiveMinutesInSeconds,
     )
@@ -106,8 +104,8 @@ export async function checkProposals({
   // when redis url is available then timePeriod is adjusted
   // to verify if we have not missed any proposals
   if (redisClient) {
-    let redisTimestamp = await redisClient.get(REDIS_KEY)
-    let redisTimestampAsNumber = redisTimestamp
+    const redisTimestamp = await redisClient.get(REDIS_KEY)
+    const redisTimestampAsNumber = redisTimestamp
       ? parseInt(redisTimestamp)
       : null
     if (
@@ -123,7 +121,6 @@ export async function checkProposals({
   let countVotingNotStartedYet = 0
   let countClosed = 0
   let countCancelled = 0
-
   for (const proposal of proposals) {
     debugProposal(logger, proposal)
     if (
@@ -216,7 +213,4 @@ function debugProposal(logger: Logger, proposal: ProgramAccount<Proposal>) {
       ? new Date(proposal.account.votingAt.toNumber() * 1000)
       : null,
   )
-}
-export function getProposalState(proposal: ProgramAccount<Proposal>): string {
-  return getStateKey(proposal.account.state) || 'Unknown'
 }
