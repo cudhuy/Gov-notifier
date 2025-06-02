@@ -32,13 +32,13 @@ export function installCheckProposals(program: Command) {
       '-r, --realm <realm>',
       'Realm to check proposals for',
       parsePubkey,
-      Promise.resolve(MNDE_REALM_ADDRESS)
+      Promise.resolve(MNDE_REALM_ADDRESS),
     )
     .option(
       '-t, --time-to-check <seconds>',
       'How many seconds in past should be checked for new proposals in the realm; default 5 minutes',
       parseFloat,
-      fiveMinutesInSeconds
+      fiveMinutesInSeconds,
     )
     .action(
       async ({
@@ -52,7 +52,7 @@ export function installCheckProposals(program: Command) {
           realm: await realm,
           timeToCheck,
         })
-      }
+      },
     )
 }
 
@@ -69,33 +69,34 @@ export async function checkProposals({
   const realmAccount = await connection.getAccountInfo(realm)
   if (realmAccount === null) {
     throw new Error(
-      `Realm ${realm.toBase58()} not found via RPC ${connection.rpcEndpoint}`
+      `Realm ${realm.toBase58()} not found via RPC ${connection.rpcEndpoint}`,
     )
   }
   const governances = await getGovernanceAccounts(
     connection,
     realmAccount.owner,
     Governance,
-    [pubkeyFilter(1, realm)!]
+    [pubkeyFilter(1, realm)!],
   )
 
   const governancesMap = accountsToPubkeyMap(governances)
 
   logger.info(
-    `getting all proposals for all #${governances.length} governances`
+    `getting all proposals for all #${governances.length} governances`,
   )
   const proposalsByGovernance = await Promise.all(
     Object.keys(governancesMap).map(governancePk => {
       return getGovernanceAccounts(connection, realmAccount.owner, Proposal, [
         pubkeyFilter(1, new PublicKey(governancePk))!,
       ])
-    })
+    }),
   )
   const proposals = proposalsByGovernance.flat()
 
   const realmUriComponent = encodeURIComponent(realm.toBase58())
   logger.info(
-    `scanning all proposals from realm ${realm.toBase58()} #` + proposals.length
+    `scanning all proposals from realm ${realm.toBase58()} #` +
+      proposals.length,
   )
 
   const nowInSeconds = new Date().getTime() / 1000
@@ -131,10 +132,6 @@ export async function checkProposals({
       // proposal is cancelled
       proposal.account.state === ProposalState.Cancelled
     ) {
-      const msg = `TEST: SPL Governance proposal '${proposal.account.name}' was cancelled`
-      await notify(msg, proposalUrl, proposalVotingAt)
-
-
       countCancelled++
       continue
     }
@@ -164,9 +161,6 @@ export async function checkProposals({
 
       const msg = `SPL Governance proposal '${proposal.account.name}' just opened for voting`
       await notify(msg, proposalUrl, proposalVotingAt)
-
-
-
     }
     // note that these could also include those in finalizing state, but this is just for logging
     else if (proposal.account.state === ProposalState.Voting) {
@@ -184,23 +178,20 @@ export async function checkProposals({
     ) {
       const msg = `SPL Governance proposal '${proposal.account.name}' will close for voting in 24 hrs`
       await notify(msg, proposalUrl, proposalVotingAt)
-
-
-
     }
   }
 
   if (redisClient) {
     await redisClient.set(
       REDIS_KEY,
-      (nowInSeconds + toleranceInSeconds).toString()
+      (nowInSeconds + toleranceInSeconds).toString(),
     )
   }
 
   logger.info(
     `countOpenForVotingSinceSomeTime: ${countOpenForVotingSinceSomeTime}, ` +
       `countJustOpenedForVoting: ${countJustOpenedForVoting}, countVotingNotStartedYet: ${countVotingNotStartedYet}, ` +
-      `countClosed: ${countClosed}, countCancelled: ${countCancelled}`
+      `countClosed: ${countClosed}, countCancelled: ${countCancelled}`,
   )
 }
 
@@ -219,6 +210,6 @@ function debugProposal(logger: Logger, proposal: ProgramAccount<Proposal>) {
       : null,
     proposal.account.votingAt
       ? new Date(proposal.account.votingAt.toNumber() * 1000)
-      : null
+      : null,
   )
 }
