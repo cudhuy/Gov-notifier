@@ -10,16 +10,17 @@ const headers = {
 export async function notify(
   message: string,
   proposalUrl: string,
-  proposalVotingAt: Date | undefined
+  proposalVotingAt: Date | undefined,
 ) {
   const { notification, logger, commandName } = useContext()
-  const proposalId = proposalUrl.split('/').at(-1)
+  const proposalUrlSplit = proposalUrl.split('/')
+  const proposalId = proposalUrlSplit[proposalUrlSplit.length - 1]
   logger.info(
     'notify proposal: %s, message: %s, url: %s, voting at: %s',
     proposalId,
     message,
     proposalUrl,
-    proposalVotingAt?.toISOString()
+    proposalVotingAt?.toISOString(),
   )
 
   switch (notification.type) {
@@ -33,8 +34,6 @@ export async function notify(
         text:
           message +
           `\n<a href="${proposalUrl}">Proposal: ${proposalId}</a>` +
-
-
           footer,
         disable_notification: true,
         parse_mode: 'HTML',
@@ -42,7 +41,7 @@ export async function notify(
       logger.debug(
         'sending telegram notification to "%s" with payload "%s"',
         url,
-        JSON.stringify(payload)
+        JSON.stringify(payload),
       )
       await axios.post(url, payload, { headers })
       break
@@ -71,7 +70,7 @@ export async function notify(
         'sending discord notification to "%s/<secret>" with payload "%s, headers: %s"',
         new URL(notification.url).origin,
         JSON.stringify(payload),
-        JSON.stringify(headers)
+        JSON.stringify(headers),
       )
       await axios.post(notification.url, payload, { headers })
       break
@@ -85,7 +84,7 @@ export async function notify(
       logger.debug(
         'sending webhook notification to "%s" with message "%s"',
         notification.url,
-        message
+        message,
       )
       break
     }
