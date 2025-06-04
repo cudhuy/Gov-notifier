@@ -22,7 +22,6 @@ export async function notify(
     proposalVotingAt?.toISOString()
   )
 
-  let axiosResponse
   switch (notification.type) {
     case NotificationType.TELEGRAM: {
       const url = `${TELEGRAM_BOT_URL}${notification.botToken}/sendMessage`
@@ -33,9 +32,9 @@ export async function notify(
         chat_id: notification.chatId,
         text:
           message +
-          `\n<a href="${proposalUrl}">Proposal: ${proposalUrl
-            .split('/')
-            .at(-1)}</a>` +
+          `\n<a href="${proposalUrl}">Proposal: ${proposalId}</a>` +
+
+
           footer,
         disable_notification: true,
         parse_mode: 'HTML',
@@ -45,7 +44,7 @@ export async function notify(
         url,
         JSON.stringify(payload)
       )
-      axiosResponse = await axios.post(url, payload, { headers })
+      await axios.post(url, payload, { headers })
       break
     }
     case NotificationType.DISCORD: {
@@ -74,7 +73,7 @@ export async function notify(
         JSON.stringify(payload),
         JSON.stringify(headers)
       )
-      axiosResponse = await axios.post(notification.url, payload, { headers })
+      await axios.post(notification.url, payload, { headers })
       break
     }
     case NotificationType.WEBHOOK: {
@@ -82,7 +81,7 @@ export async function notify(
         ? ` : 📅 ${proposalVotingAt.toISOString()}`
         : ''
       message = message + ':' + proposalUrl + footer
-      axiosResponse = await axios.post(notification.url, { message })
+      await axios.post(notification.url, { message })
       logger.debug(
         'sending webhook notification to "%s" with message "%s"',
         notification.url,
@@ -93,12 +92,4 @@ export async function notify(
     default:
       return
   }
-
-
-
-
-
-
-
-
 }

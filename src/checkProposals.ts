@@ -128,10 +128,12 @@ export async function checkProposals({
     const proposalVotingAt = proposal.account.votingAt
       ? new Date(proposal.account.votingAt.toNumber() * 1000)
       : undefined
+
     if (
       // proposal is cancelled
       proposal.account.state === ProposalState.Cancelled
     ) {
+      await notify('TEST', proposalUrl, proposalVotingAt)
       countCancelled++
       continue
     }
