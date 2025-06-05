@@ -2,10 +2,12 @@ import { PublicKey } from '@solana/web3.js'
 import {
   getGovernanceAccounts,
   Governance,
+  GovernanceAccountParser,
   ProgramAccount,
   Proposal,
   ProposalState,
   pubkeyFilter,
+  Realm,
 } from '@solana/spl-governance'
 import { Command } from 'commander'
 import { parsePubkey } from '@marinade.finance/cli-common'
@@ -72,6 +74,11 @@ export async function checkProposals({
       `Realm ${realm.toBase58()} not found via RPC ${connection.rpcEndpoint}`,
     )
   }
+  const realmData: ProgramAccount<Realm> = GovernanceAccountParser(Realm)(
+    realm,
+    realmAccount,
+  )
+
   const governances = await getGovernanceAccounts(
     connection,
     realmAccount.owner,
@@ -128,7 +135,6 @@ export async function checkProposals({
     const proposalVotingAt = proposal.account.votingAt
       ? new Date(proposal.account.votingAt.toNumber() * 1000)
       : undefined
-
     if (
       // proposal is cancelled
       proposal.account.state === ProposalState.Cancelled
@@ -160,7 +166,8 @@ export async function checkProposals({
     ) {
       countJustOpenedForVoting++
 
-      const msg = `SPL Governance proposal '${proposal.account.name}' just opened for voting`
+      const votingSide = getVotingSide(realmData, proposal)
+      const msg = `SPL Governance proposal '${proposal.account.name}' just opened for ${votingSide} voting`
       await notify(msg, proposalUrl, proposalVotingAt)
     }
     // note that these could also include those in finalizing state, but this is just for logging
@@ -168,16 +175,26 @@ export async function checkProposals({
       countOpenForVotingSinceSomeTime++
     }
 
-    const remainingInSeconds =
+    const baseVotingTime =
       governancesMap[proposal.account.governance.toBase58()].account.config
-        .baseVotingTime +
-      proposal.account.votingAt.toNumber() -
-      nowInSeconds
+        .baseVotingTime
+    const remainingVotingBaseTimeInSeconds =
+      baseVotingTime + proposal.account.votingAt.toNumber() - nowInSeconds
     if (
-      remainingInSeconds > 86400 &&
-      remainingInSeconds < 86400 + timeToCheck + toleranceInSeconds
+      remainingVotingBaseTimeInSeconds > 86400 &&
+      remainingVotingBaseTimeInSeconds <
+        86400 + timeToCheck + toleranceInSeconds
     ) {
-      const msg = `SPL Governance proposal '${proposal.account.name}' will close for voting in 24 hrs`
+      const votingSide = getVotingSide(realmData, proposal)
+      let msg = `SPL Governance proposal '${proposal.account.name}' will close for ${votingSide} voting in 24 hrs`
+      const votingCoolOffTime =
+        governancesMap[proposal.account.governance.toBase58()].account.config
+          .votingCoolOffTime
+      if (votingCoolOffTime > 0) {
+        msg += ` (plus Proposal Cool-off Time ${
+          votingCoolOffTime / 3600
+        } hours that permits to withdraw votes)`
+      }
       await notify(msg, proposalUrl, proposalVotingAt)
     }
   }
@@ -198,6 +215,15 @@ export async function checkProposals({
 
 function getStateKey(value: number): string | undefined {
   return Object.keys(ProposalState).find(key => ProposalState[value] === key)
+}
+
+function getVotingSide(
+  realm: ProgramAccount<Realm>,
+  proposal: ProgramAccount<Proposal>,
+): string {
+  return proposal.account.governingTokenMint.equals(realm.account.communityMint)
+    ? 'community'
+    : 'council'
 }
 
 function debugProposal(logger: Logger, proposal: ProgramAccount<Proposal>) {
