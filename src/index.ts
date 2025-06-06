@@ -2,7 +2,7 @@
 /* eslint-disable no-process-exit */
 
 import { Command, Option } from 'commander'
-import { installCheckProposals } from './checkProposals'
+import { installCheckProposals } from './commands/checkProposals'
 import { NOTIFICATION_TYPE_NAMES, setCliContext } from './context'
 import { configureLogger } from '@marinade.finance/cli-common'
 // import 'source-map-support/register'
