@@ -2,9 +2,11 @@ import { ProgramAccount } from '@realms-today/spl-governance'
 
 // adapted from https://github.com/solana-labs/governance-ui
 
-@param accounts
-@returns
-
+/**
+ * Maps the source array of account to a map keyed by pubkey of the accounts
+ * @param accounts
+ * @returns
+ */
 export function accountsToPubkeyMap<T>(accounts: ProgramAccount<T>[]) {
   return arrayToRecord(accounts, a => a.pubkey.toBase58())
 }
