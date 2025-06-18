@@ -36,3 +36,38 @@ Options:
   --slack-notification-color <color>    Color for Slack notifications in hex format (default: aero blue) (default: "#c9ffe5")
   --bot-name <botName>                  Name of bot that will be announced in notification (default: "SPL Governance Notifier")
   -h, --help                            display help for command
+
+Commands:
+  proposals [options]                   Verify existence of newly created governance proposals in last time period
+  help [command]                        display help for command
+
+```
+
+To list all proposals for default MNDE realm without any notification to be sent
+
+```bash
+# default RPC may not be able to list the proposal data
+export RPC_URL='https://api.mainnet-beta.solana.com'
+pnpm cli proposals -u $RPC_URL -v
+```
+
+## Testing
+
+For testing purposes one may try to use webhook type on localhost
+
+### 1. Start mock HTTP replier
+
+```sh
+socat -v TCP-LISTEN:8000,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain; echo; echo OK"
+```
+
+### 2. Notify on closed proposals
+
+* Run the notify pointing to the locally started mocked HTTP replier
+* Use option `--report-closed` to notify about closed proposals (by default only opened are reported)
+* Prolong the `--time-to-check` for example for 3 months to list all opened+closed proposals during that time.
+
+```sh
+pnpm cli proposals -u $RPC_URL --report-closed --time-to-check 7889231 \
+  --webhook --webhook-url http://0.0.0.0:8000
+```
