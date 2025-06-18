@@ -14,8 +14,8 @@ import { parsePubkey } from '@marinade.finance/cli-common'
 import { MNDE_REALM_ADDRESS } from '@marinade.finance/spl-gov-utils'
 import { useContext } from '../context'
 import { accountsToPubkeyMap } from '../utils'
-
 import { Logger } from 'pino'
+import { sendNotifications } from '../notifier'
 
 // advanced from https://github.com/solana-labs/governance-ui
 //  - expecting to be run every X mins via a cronjob
@@ -37,7 +37,6 @@ export function installCheckProposals(program: Command) {
       '-r, --realm <realm>',
       `Realm to check proposals for (default: Marinade Finance ${MNDE_REALM_ADDRESS.toBase58()})`,
       parsePubkey,
-
     )
     .option(
       '-t, --time-to-check <seconds>',
@@ -50,7 +49,7 @@ export function installCheckProposals(program: Command) {
       'Amount of time (in seconds) that is used as buffer for looking back to past as an addition to `--time-to-check` to not skip any notification ' +
         'when `--time-to-check` is defined for example for 5 minutes and cron job time goes every 5 minutes. ' +
         'When redis is defined then this value should be close to 0 to not double emit notifications.',
-      v => parseInt(v, 60),
+      v => parseInt(v, 10),
       toleranceInSecondsDefault,
     )
     .option(
@@ -203,6 +202,7 @@ export async function checkProposals({
 
       const votingSide = getVotingSide(realmData, proposal) // community or council
       const message = `SPL Governance proposal '${proposal.account.name}' opened for ${votingSide} voting`
+      await sendNotifications({ message, proposalUrl, proposalVotingAt })
       continue
     }
 
@@ -217,7 +217,8 @@ export async function checkProposals({
     const remainingVotingBaseTimeInSeconds =
       baseVotingTime + proposal.account.votingAt.toNumber() - currentTimestamp
     if (
-      remainingVotingBaseTimeInSeconds > oneDayInSeconds &&
+      remainingVotingBaseTimeInSeconds >=
+        oneDayInSeconds - toleranceInSeconds &&
       remainingVotingBaseTimeInSeconds <
         oneDayInSeconds + lookBackPeriod + toleranceInSeconds
     ) {
@@ -231,6 +232,7 @@ export async function checkProposals({
           votingCoolOffTime / 3600
         } hours that permits to withdraw votes)`
       }
+      await sendNotifications({ message, proposalUrl, proposalVotingAt })
     }
   }
 

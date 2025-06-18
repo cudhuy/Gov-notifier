@@ -62,6 +62,7 @@ installCommands(program)
 program.parseAsync(process.argv).then(
   () => {
     logger.debug({ resolution: 'Success', args: process.argv })
+    process.exit(0)
   },
   (err: Error) => {
     logger.error(
@@ -70,7 +71,7 @@ program.parseAsync(process.argv).then(
         : err.message,
     )
     logger.debug({ resolution: 'Failure', err, args: process.argv })
+    process.exit(1)
 
-    process.exitCode = 1
   },
 )
